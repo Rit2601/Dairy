@@ -7,6 +7,7 @@ import { addToCart, openCart } from '../store/slices/cartSlice';
 import { pageTransition } from '../animations/motionVariants';
 import { Minus, Plus, ShoppingCart, Star, Zap, Shield, Leaf } from 'lucide-react';
 import { Spinner } from '../components/Loader';
+import { getImageUrl, PLACEHOLDER_IMGS } from '../utils/imageUrl';
 import toast from 'react-hot-toast';
 
 export default function Product() {
@@ -24,14 +25,20 @@ export default function Product() {
   }, [slug, dispatch]);
 
   const handleAddToCart = async () => {
-    if (!isAuthenticated) { toast.error('Please login first'); navigate('/login'); return; }
+    if (!isAuthenticated) {
+      toast.error('Please login first');
+      navigate('/login');
+      return;
+    }
     setAdding(true);
     try {
-      await dispatch(addToCart({ productId: product._id, quantity: qty })).unwrap();
+      await dispatch(
+        addToCart({ productId: product._id, quantity: qty })
+      ).unwrap();
       dispatch(openCart());
       toast.success('Added to cart! 🛒');
     } catch (err) {
-      toast.error(err || 'Failed to add');
+      toast.error(typeof err === 'string' ? err : 'Failed to add to cart');
     } finally {
       setAdding(false);
     }
@@ -45,12 +52,23 @@ export default function Product() {
     );
   }
 
-  const imgs = product.images?.length > 0
-    ? product.images
-    : ['https://images.unsplash.com/photo-1550583724-b2692b85b150?w=600&h=600&fit=crop'];
+  const rawImages =
+    product.images?.length > 0
+      ? product.images
+      : product.image
+      ? [product.image]
+      : [];
+
+  const imgs =
+    rawImages.length > 0
+      ? rawImages.map((i) => getImageUrl(i))
+      : [PLACEHOLDER_IMGS[0]];
 
   return (
-    <motion.div {...pageTransition} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <motion.div
+      {...pageTransition}
+      className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
+    >
       <div className="grid md:grid-cols-2 gap-10">
         {/* Images */}
         <div>
@@ -58,9 +76,16 @@ export default function Product() {
             key={activeImg}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="bg-cream-50 rounded-3xl overflow-hidden aspect-square border border-gray-100"
+            className="bg-gray-50 rounded-3xl overflow-hidden aspect-square border border-gray-100"
           >
-            <img src={imgs[activeImg]} alt={product.name} className="w-full h-full object-cover" />
+            <img
+              src={imgs[activeImg]}
+              alt={product.name}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                e.target.src = PLACEHOLDER_IMGS[0];
+              }}
+            />
           </motion.div>
           {imgs.length > 1 && (
             <div className="flex gap-2 mt-3">
@@ -68,9 +93,16 @@ export default function Product() {
                 <button
                   key={i}
                   onClick={() => setActiveImg(i)}
-                  className={`w-16 h-16 rounded-xl overflow-hidden border-2 transition-colors ${activeImg === i ? 'border-brand-500' : 'border-transparent'}`}
+                  className={`w-16 h-16 rounded-xl overflow-hidden border-2 transition-colors ${
+                    activeImg === i ? 'border-brand-500' : 'border-transparent'
+                  }`}
                 >
-                  <img src={img} alt="" className="w-full h-full object-cover" />
+                  <img
+                    src={img}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    onError={(e) => { e.target.src = PLACEHOLDER_IMGS[0]; }}
+                  />
                 </button>
               ))}
             </div>
@@ -80,29 +112,51 @@ export default function Product() {
         {/* Info */}
         <div className="space-y-5">
           <div>
-            <p className="text-brand-600 font-medium text-sm">{product.category?.name}</p>
-            <h1 className="font-display text-3xl font-bold text-gray-900 mt-1">{product.name}</h1>
+            <p className="text-brand-600 font-medium text-sm">
+              {typeof product.category === 'object'
+                ? product.category?.name
+                : product.category}
+            </p>
+            <h1 className="font-display text-3xl font-bold text-gray-900 mt-1">
+              {product.name}
+            </h1>
             <p className="text-gray-500 mt-1">{product.unit}</p>
           </div>
 
           {/* Rating */}
           <div className="flex items-center gap-2">
             <div className="flex gap-0.5">
-              {[1,2,3,4,5].map(n => (
-                <Star key={n} size={16} className={n <= Math.round(product.rating) ? 'fill-amber-400 text-amber-400' : 'text-gray-200 fill-gray-200'} />
+              {[1, 2, 3, 4, 5].map((n) => (
+                <Star
+                  key={n}
+                  size={16}
+                  className={
+                    n <= Math.round(product.rating)
+                      ? 'fill-amber-400 text-amber-400'
+                      : 'text-gray-200 fill-gray-200'
+                  }
+                />
               ))}
             </div>
-            <span className="text-sm text-gray-500">{product.rating?.toFixed(1)} ({product.reviewCount} reviews)</span>
+            <span className="text-sm text-gray-500">
+              {Number(product.rating).toFixed(1)} ({product.reviewCount} reviews)
+            </span>
           </div>
 
           {/* Price */}
           <div className="flex items-end gap-3">
-            <span className="text-3xl font-bold text-gray-900">₹{product.price}</span>
+            <span className="text-3xl font-bold text-gray-900">
+              ₹{product.price}
+            </span>
             {product.mrp && product.mrp > product.price && (
               <>
-                <span className="text-lg text-gray-400 line-through">₹{product.mrp}</span>
+                <span className="text-lg text-gray-400 line-through">
+                  ₹{product.mrp}
+                </span>
                 <span className="bg-red-100 text-red-500 text-sm font-bold px-2 py-0.5 rounded-lg">
-                  {Math.round(((product.mrp - product.price) / product.mrp) * 100)}% off
+                  {Math.round(
+                    ((product.mrp - product.price) / product.mrp) * 100
+                  )}% off
                 </span>
               </>
             )}
@@ -125,11 +179,17 @@ export default function Product() {
           {/* Qty + Cart */}
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 bg-gray-100 rounded-xl p-1">
-              <button onClick={() => setQty(Math.max(1, qty - 1))} className="w-9 h-9 rounded-lg bg-white shadow-sm flex items-center justify-center hover:bg-brand-50 transition-colors">
+              <button
+                onClick={() => setQty(Math.max(1, qty - 1))}
+                className="w-9 h-9 rounded-lg bg-white shadow-sm flex items-center justify-center hover:bg-brand-50 transition-colors"
+              >
                 <Minus size={16} />
               </button>
               <span className="w-8 text-center font-bold text-lg">{qty}</span>
-              <button onClick={() => setQty(Math.min(product.stock, qty + 1))} className="w-9 h-9 rounded-lg bg-brand-500 text-white flex items-center justify-center hover:bg-brand-600 transition-colors">
+              <button
+                onClick={() => setQty(Math.min(product.stock || 99, qty + 1))}
+                className="w-9 h-9 rounded-lg bg-brand-500 text-white flex items-center justify-center hover:bg-brand-600 transition-colors"
+              >
                 <Plus size={16} />
               </button>
             </div>
@@ -137,7 +197,7 @@ export default function Product() {
               whileTap={{ scale: 0.97 }}
               onClick={handleAddToCart}
               disabled={adding || product.stock === 0}
-              className="flex-1 btn-primary flex items-center justify-center gap-2 disabled:opacity-60"
+              className="flex-1 bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white font-semibold py-3 rounded-2xl flex items-center justify-center gap-2 transition-colors"
             >
               {adding ? <Spinner size="sm" /> : <ShoppingCart size={18} />}
               {adding ? 'Adding...' : 'Add to Cart'}
@@ -150,8 +210,11 @@ export default function Product() {
               { icon: <Zap size={18} className="text-amber-500" />, text: '30-min delivery' },
               { icon: <Shield size={18} className="text-brand-600" />, text: 'Quality assured' },
               { icon: <Leaf size={18} className="text-green-500" />, text: 'No preservatives' },
-            ].map(item => (
-              <div key={item.text} className="flex flex-col items-center gap-1 text-center p-2 bg-gray-50 rounded-xl">
+            ].map((item) => (
+              <div
+                key={item.text}
+                className="flex flex-col items-center gap-1 text-center p-2 bg-gray-50 rounded-xl"
+              >
                 {item.icon}
                 <span className="text-xs text-gray-600">{item.text}</span>
               </div>

@@ -4,8 +4,9 @@ import { motion } from 'framer-motion';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchOrderById } from '../store/slices/orderSlice';
 import { pageTransition } from '../animations/motionVariants';
-import { MapPin, Clock, CreditCard, Package, ChevronLeft } from 'lucide-react';
+import { MapPin, ChevronLeft } from 'lucide-react';
 import { Spinner } from '../components/Loader';
+import { getImageUrl } from '../utils/imageUrl';
 
 const ORDER_STEPS = [
   { key: 'placed', label: 'Order Placed', icon: '📦' },
@@ -20,17 +21,29 @@ export default function OrderDetail() {
   const dispatch = useDispatch();
   const { currentOrder: order, loading } = useSelector((s) => s.orders);
 
-  useEffect(() => { dispatch(fetchOrderById(id)); }, [id, dispatch]);
+  useEffect(() => {
+    dispatch(fetchOrderById(id));
+  }, [id, dispatch]);
 
   if (loading || !order) {
-    return <div className="flex justify-center py-20"><Spinner size="lg" /></div>;
+    return (
+      <div className="flex justify-center py-20">
+        <Spinner size="lg" />
+      </div>
+    );
   }
 
-  const currentStepIdx = ORDER_STEPS.findIndex(s => s.key === order.status);
+  const currentStepIdx = ORDER_STEPS.findIndex((s) => s.key === order.status);
 
   return (
-    <motion.div {...pageTransition} className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
-      <Link to="/orders" className="flex items-center gap-1 text-gray-500 hover:text-brand-600 mb-5 text-sm">
+    <motion.div
+      {...pageTransition}
+      className="max-w-3xl mx-auto px-4 sm:px-6 py-8"
+    >
+      <Link
+        to="/orders"
+        className="flex items-center gap-1 text-gray-500 hover:text-brand-600 mb-5 text-sm"
+      >
         <ChevronLeft size={16} /> Back to Orders
       </Link>
 
@@ -39,12 +52,18 @@ export default function OrderDetail() {
         <div className="bg-white rounded-2xl p-5 shadow-sm">
           <div className="flex justify-between items-start">
             <div>
-              <h1 className="font-display text-xl font-bold text-gray-900">Order #{order.orderNumber}</h1>
-              <p className="text-sm text-gray-400 mt-0.5">{new Date(order.createdAt).toLocaleString('en-IN')}</p>
+              <h1 className="font-display text-xl font-bold text-gray-900">
+                Order #{order.orderNumber}
+              </h1>
+              <p className="text-sm text-gray-400 mt-0.5">
+                {new Date(order.createdAt).toLocaleString('en-IN')}
+              </p>
             </div>
             <div className="text-right">
               <p className="text-2xl font-bold text-gray-900">₹{order.total}</p>
-              <p className="text-xs text-gray-400">{order.payment.method.toUpperCase()}</p>
+              <p className="text-xs text-gray-400 uppercase">
+                {order.payment.method}
+              </p>
             </div>
           </div>
         </div>
@@ -64,14 +83,38 @@ export default function OrderDetail() {
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: i * 0.08 }}
-                    className={`relative flex items-start gap-4 pb-5 last:pb-0 ${isCompleted ? '' : 'opacity-40'}`}
+                    className={`relative flex items-start gap-4 pb-5 last:pb-0 ${
+                      isCompleted ? '' : 'opacity-40'
+                    }`}
                   >
-                    <div className={`relative z-10 w-10 h-10 rounded-full flex items-center justify-center text-lg border-2 ${isCurrent ? 'border-brand-500 bg-brand-50' : isCompleted ? 'border-brand-500 bg-brand-500' : 'border-gray-200 bg-white'}`}>
+                    <div
+                      className={`relative z-10 w-10 h-10 rounded-full flex items-center justify-center text-lg border-2 ${
+                        isCurrent
+                          ? 'border-brand-500 bg-brand-50'
+                          : isCompleted
+                          ? 'border-brand-500 bg-brand-500'
+                          : 'border-gray-200 bg-white'
+                      }`}
+                    >
                       {step.icon}
                     </div>
                     <div className="pt-2">
-                      <p className={`text-sm font-semibold ${isCurrent ? 'text-brand-600' : isCompleted ? 'text-gray-800' : 'text-gray-400'}`}>{step.label}</p>
-                      {isCurrent && <p className="text-xs text-brand-500 mt-0.5">Current status</p>}
+                      <p
+                        className={`text-sm font-semibold ${
+                          isCurrent
+                            ? 'text-brand-600'
+                            : isCompleted
+                            ? 'text-gray-800'
+                            : 'text-gray-400'
+                        }`}
+                      >
+                        {step.label}
+                      </p>
+                      {isCurrent && (
+                        <p className="text-xs text-brand-500 mt-0.5">
+                          Current status
+                        </p>
+                      )}
                     </div>
                   </motion.div>
                 );
@@ -86,28 +129,70 @@ export default function OrderDetail() {
           <div className="space-y-3">
             {order.items.map((item, i) => (
               <div key={i} className="flex gap-3">
-                <img src={item.image || 'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=60&fit=crop'} alt={item.name} className="w-12 h-12 rounded-xl object-cover" />
+                <img
+                  src={getImageUrl(item.image)}
+                  alt={item.name}
+                  className="w-12 h-12 rounded-xl object-cover"
+                  onError={(e) => {
+                    e.target.src =
+                      'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=60&fit=crop';
+                  }}
+                />
                 <div className="flex-1">
                   <p className="text-sm font-medium text-gray-800">{item.name}</p>
-                  <p className="text-xs text-gray-400">{item.unit} × {item.quantity}</p>
+                  <p className="text-xs text-gray-400">
+                    {item.unit} × {item.quantity}
+                  </p>
                 </div>
-                <p className="text-sm font-semibold text-gray-800">₹{(item.price * item.quantity).toFixed(0)}</p>
+                <p className="text-sm font-semibold text-gray-800">
+                  ₹{(item.price * item.quantity).toFixed(0)}
+                </p>
               </div>
             ))}
           </div>
           <div className="border-t mt-3 pt-3 space-y-1.5 text-sm">
-            <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>₹{order.subtotal}</span></div>
-            <div className="flex justify-between text-gray-500"><span>Delivery</span><span>{order.deliveryFee === 0 ? 'FREE' : `₹${order.deliveryFee}`}</span></div>
-            <div className="flex justify-between font-bold text-gray-900"><span>Total</span><span>₹{order.total}</span></div>
+            <div className="flex justify-between text-gray-500">
+              <span>Subtotal</span>
+              <span>₹{order.subtotal}</span>
+            </div>
+            <div className="flex justify-between text-gray-500">
+              <span>Delivery</span>
+              <span>
+                {order.deliveryFee === 0 ? 'FREE' : `₹${order.deliveryFee}`}
+              </span>
+            </div>
+            <div className="flex justify-between font-bold text-gray-900">
+              <span>Total</span>
+              <span>₹{order.total}</span>
+            </div>
           </div>
         </div>
 
         {/* Address */}
         <div className="bg-white rounded-2xl p-5 shadow-sm">
-          <h2 className="font-semibold text-gray-800 mb-2 flex items-center gap-2"><MapPin size={16} className="text-brand-600" /> Delivery Address</h2>
-          <p className="text-sm text-gray-600">{order.address.fullName} • {order.address.phone}</p>
-          <p className="text-sm text-gray-500">{order.address.line1}, {order.address.city}, {order.address.state} - {order.address.pincode}</p>
+          <h2 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+            <MapPin size={16} className="text-brand-600" /> Delivery Address
+          </h2>
+          <p className="text-sm text-gray-600">
+            {order.address.fullName} • {order.address.phone}
+          </p>
+          <p className="text-sm text-gray-500">
+            {order.address.line1}
+            {order.address.line2 ? `, ${order.address.line2}` : ''},{' '}
+            {order.address.city}, {order.address.state} —{' '}
+            {order.address.pincode}
+          </p>
         </div>
+
+        {/* Delivery Slot */}
+        {order.deliverySlot?.date && (
+          <div className="bg-white rounded-2xl p-5 shadow-sm">
+            <h2 className="font-semibold text-gray-800 mb-1">Delivery Slot</h2>
+            <p className="text-sm text-gray-600">
+              {order.deliverySlot.date} • {order.deliverySlot.timeSlot}
+            </p>
+          </div>
+        )}
       </div>
     </motion.div>
   );

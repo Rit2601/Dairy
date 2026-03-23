@@ -6,7 +6,7 @@ const Payment = require('../models/Payment');
 
 const getRazorpay = () => {
   if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
-    throw new Error('Razorpay keys not configured');
+    throw new Error('Razorpay keys not configured in environment variables');
   }
   return new Razorpay({
     key_id: process.env.RAZORPAY_KEY_ID,
@@ -14,6 +14,8 @@ const getRazorpay = () => {
   });
 };
 
+// @desc  Create Razorpay order
+// @route POST /api/payments/create-order
 const createRazorpayOrder = asyncHandler(async (req, res) => {
   const { amount, orderId } = req.body;
 
@@ -22,10 +24,7 @@ const createRazorpayOrder = asyncHandler(async (req, res) => {
     throw new Error('Amount and orderId are required');
   }
 
-  const order = await Order.findOne({
-    _id: orderId,
-    user: req.user._id,
-  });
+  const order = await Order.findOne({ _id: orderId, user: req.user._id });
   if (!order) {
     res.status(404);
     throw new Error('Order not found');
@@ -34,10 +33,13 @@ const createRazorpayOrder = asyncHandler(async (req, res) => {
   const razorpay = getRazorpay();
 
   const rzpOrder = await razorpay.orders.create({
-    amount: Math.round(amount * 100),
+    amount: Math.round(Number(amount) * 100),
     currency: 'INR',
-    receipt: `df_${orderId.toString().slice(-8)}`,
-    notes: { orderId: orderId.toString() },
+    receipt: `df_${orderId.toString().slice(-8)}_${Date.now()}`,
+    notes: {
+      orderId: orderId.toString(),
+      userId: req.user._id.toString(),
+    },
   });
 
   order.payment.razorpayOrderId = rzpOrder.id;
@@ -52,6 +54,8 @@ const createRazorpayOrder = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc  Verify Razorpay payment
+// @route POST /api/payments/verify
 const verifyPayment = asyncHandler(async (req, res) => {
   const {
     razorpayOrderId,
@@ -62,10 +66,10 @@ const verifyPayment = asyncHandler(async (req, res) => {
 
   if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature || !orderId) {
     res.status(400);
-    throw new Error('Missing payment fields');
+    throw new Error('All payment fields are required');
   }
 
-  // Verify signature
+  // Verify HMAC signature
   const expectedSignature = crypto
     .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
     .update(`${razorpayOrderId}|${razorpayPaymentId}`)
@@ -73,18 +77,16 @@ const verifyPayment = asyncHandler(async (req, res) => {
 
   if (expectedSignature !== razorpaySignature) {
     res.status(400);
-    throw new Error('Invalid payment signature');
+    throw new Error('Payment verification failed — invalid signature');
   }
 
-  const order = await Order.findOne({
-    _id: orderId,
-    user: req.user._id,
-  });
+  const order = await Order.findOne({ _id: orderId, user: req.user._id });
   if (!order) {
     res.status(404);
     throw new Error('Order not found');
   }
 
+  // Update order payment details
   order.payment.razorpayOrderId = razorpayOrderId;
   order.payment.razorpayPaymentId = razorpayPaymentId;
   order.payment.razorpaySignature = razorpaySignature;
@@ -94,9 +96,11 @@ const verifyPayment = asyncHandler(async (req, res) => {
   order.statusHistory.push({
     status: 'confirmed',
     note: 'Payment received via Razorpay',
+    timestamp: new Date(),
   });
   await order.save();
 
+  // Save payment record
   await Payment.create({
     user: req.user._id,
     order: orderId,
@@ -111,20 +115,24 @@ const verifyPayment = asyncHandler(async (req, res) => {
 
   res.json({
     success: true,
-    message: 'Payment verified',
+    message: 'Payment verified successfully',
     orderId: order._id,
   });
 });
 
+// @desc  Get payment status
+// @route GET /api/payments/status/:orderId
 const getPaymentStatus = asyncHandler(async (req, res) => {
   const order = await Order.findOne({
     _id: req.params.orderId,
     user: req.user._id,
   });
+
   if (!order) {
     res.status(404);
     throw new Error('Order not found');
   }
+
   res.json({
     success: true,
     paymentStatus: order.payment.status,
@@ -134,8 +142,4 @@ const getPaymentStatus = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = {
-  createRazorpayOrder,
-  verifyPayment,
-  getPaymentStatus,
-};
+module.exports = { createRazorpayOrder, verifyPayment, getPaymentStatus };

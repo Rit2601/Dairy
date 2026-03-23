@@ -9,8 +9,7 @@ import {
   removeFromCart,
   selectCartTotal,
 } from '../store/slices/cartSlice';
-
-const PLACEHOLDER = 'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=80&h=80&fit=crop';
+import { getProductImage } from '../utils/imageUrl';
 
 export default function CartDrawer() {
   const { isOpen, items } = useSelector((s) => s.cart);
@@ -67,7 +66,9 @@ export default function CartDrawer() {
                 <div className="flex flex-col items-center justify-center h-full text-center py-12">
                   <div className="text-5xl mb-4">🛒</div>
                   <p className="text-gray-500 font-medium">Your cart is empty</p>
-                  <p className="text-gray-400 text-sm mt-1">Add some fresh dairy products!</p>
+                  <p className="text-gray-400 text-sm mt-1">
+                    Add some fresh dairy products!
+                  </p>
                   <button
                     onClick={() => dispatch(closeCart())}
                     className="mt-4 bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2 px-5 rounded-2xl text-sm transition-colors"
@@ -86,21 +87,24 @@ export default function CartDrawer() {
                     className="flex gap-3 bg-gray-50 rounded-2xl p-3"
                   >
                     <img
-                      src={
-                        item.product?.images?.[0] ||
-                        item.product?.image ||
-                        PLACEHOLDER
-                      }
+                      src={getProductImage(item.product)}
                       alt={item.product?.name}
                       className="w-14 h-14 rounded-xl object-cover flex-shrink-0"
-                      onError={(e) => { e.target.src = PLACEHOLDER; }}
+                      onError={(e) => {
+                        e.target.src =
+                          'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=80&fit=crop';
+                      }}
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-gray-800 truncate">
                         {item.product?.name}
                       </p>
-                      <p className="text-xs text-gray-400">{item.product?.unit}</p>
-                      <p className="text-sm font-bold text-brand-600 mt-0.5">₹{item.price}</p>
+                      <p className="text-xs text-gray-400">
+                        {item.product?.unit}
+                      </p>
+                      <p className="text-sm font-bold text-brand-600 mt-0.5">
+                        ₹{item.price}
+                      </p>
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       <button
@@ -111,7 +115,14 @@ export default function CartDrawer() {
                       </button>
                       <div className="flex items-center gap-1.5">
                         <button
-                          onClick={() => dispatch(updateCartItem({ itemId: item._id, quantity: item.quantity - 1 }))}
+                          onClick={() =>
+                            dispatch(
+                              updateCartItem({
+                                itemId: item._id,
+                                quantity: item.quantity - 1,
+                              })
+                            )
+                          }
                           className="w-6 h-6 rounded-lg bg-white border border-gray-200 flex items-center justify-center hover:bg-brand-50 hover:border-brand-300 transition-colors"
                         >
                           <Minus size={11} />
@@ -120,7 +131,14 @@ export default function CartDrawer() {
                           {item.quantity}
                         </span>
                         <button
-                          onClick={() => dispatch(updateCartItem({ itemId: item._id, quantity: item.quantity + 1 }))}
+                          onClick={() =>
+                            dispatch(
+                              updateCartItem({
+                                itemId: item._id,
+                                quantity: item.quantity + 1,
+                              })
+                            )
+                          }
                           className="w-6 h-6 rounded-lg bg-brand-500 text-white flex items-center justify-center hover:bg-brand-600 transition-colors"
                         >
                           <Plus size={11} />
@@ -142,7 +160,11 @@ export default function CartDrawer() {
                   </div>
                   <div className="flex justify-between text-gray-600">
                     <span>Delivery</span>
-                    <span className={DELIVERY_FEE === 0 ? 'text-brand-600 font-medium' : ''}>
+                    <span
+                      className={
+                        DELIVERY_FEE === 0 ? 'text-brand-600 font-medium' : ''
+                      }
+                    >
                       {DELIVERY_FEE === 0 ? 'FREE' : `₹${DELIVERY_FEE}`}
                     </span>
                   </div>

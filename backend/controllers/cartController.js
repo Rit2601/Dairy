@@ -11,14 +11,19 @@ const getCart = asyncHandler(async (req, res) => {
     return res.json({ success: true, cart: { items: [] } });
   }
 
-  // Filter out deleted products
-  cart.items = (cart.items || []).filter((i) => i.product);
+  // Remove items where product was deleted
+  cart.items = (cart.items || []).filter((i) => i.product != null);
 
   res.json({ success: true, cart });
 });
 
 const addToCart = asyncHandler(async (req, res) => {
   const { productId, quantity = 1, variantIndex = -1 } = req.body;
+
+  if (!productId) {
+    res.status(400);
+    throw new Error('Product ID is required');
+  }
 
   const product = await Product.findById(productId);
   if (!product) {
@@ -40,7 +45,7 @@ const addToCart = asyncHandler(async (req, res) => {
   const itemIndex = cart.items.findIndex(
     (i) =>
       i.product.toString() === productId &&
-      i.variantIndex === variantIndex
+      i.variantIndex === Number(variantIndex)
   );
 
   if (itemIndex > -1) {
@@ -49,7 +54,7 @@ const addToCart = asyncHandler(async (req, res) => {
     cart.items.push({
       product: productId,
       quantity: Number(quantity),
-      variantIndex,
+      variantIndex: Number(variantIndex),
       price,
     });
   }
@@ -104,10 +109,7 @@ const removeFromCart = asyncHandler(async (req, res) => {
 });
 
 const clearCart = asyncHandler(async (req, res) => {
-  await Cart.findOneAndUpdate(
-    { user: req.user._id },
-    { items: [] }
-  );
+  await Cart.findOneAndUpdate({ user: req.user._id }, { items: [] });
   res.json({ success: true, message: 'Cart cleared' });
 });
 

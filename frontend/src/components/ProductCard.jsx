@@ -4,23 +4,15 @@ import { Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { Plus, Star, Zap } from 'lucide-react';
 import { addToCart, openCart } from '../store/slices/cartSlice';
+import { getProductImage, PLACEHOLDER_IMGS } from '../utils/imageUrl';
 import toast from 'react-hot-toast';
-
-const PLACEHOLDER_IMGS = [
-  'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=400&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1628088062854-d1870b4553da?w=400&h=400&fit=crop',
-  'https://images.unsplash.com/photo-1559598467-f8b76c8155d0?w=400&h=400&fit=crop',
-];
 
 export default function ProductCard({ product, index = 0 }) {
   const [adding, setAdding] = useState(false);
   const dispatch = useDispatch();
   const { isAuthenticated } = useSelector((s) => s.auth);
 
-  const imgSrc =
-    product.images?.[0] ||
-    product.image ||
-    PLACEHOLDER_IMGS[index % PLACEHOLDER_IMGS.length];
+  const imgSrc = getProductImage(product, index);
 
   const discount =
     product.mrp && product.mrp > product.price
@@ -34,7 +26,7 @@ export default function ProductCard({ product, index = 0 }) {
 
   const categoryName =
     typeof product.category === 'object'
-      ? product.category?.name
+      ? product.category?.name || 'Dairy'
       : product.category || 'Dairy';
 
   const handleAddToCart = async (e) => {
@@ -52,7 +44,9 @@ export default function ProductCard({ product, index = 0 }) {
 
     setAdding(true);
     try {
-      await dispatch(addToCart({ productId: product._id, quantity: 1 })).unwrap();
+      await dispatch(
+        addToCart({ productId: product._id, quantity: 1 })
+      ).unwrap();
       dispatch(openCart());
       toast.success(`${product.name} added to cart! 🛒`);
     } catch (err) {
@@ -115,9 +109,13 @@ export default function ProductCard({ product, index = 0 }) {
 
           <div className="flex items-center justify-between mt-2.5">
             <div>
-              <span className="text-base font-bold text-gray-900">₹{product.price}</span>
+              <span className="text-base font-bold text-gray-900">
+                ₹{product.price}
+              </span>
               {product.mrp && product.mrp > product.price && (
-                <span className="text-xs text-gray-400 line-through ml-1">₹{product.mrp}</span>
+                <span className="text-xs text-gray-400 line-through ml-1">
+                  ₹{product.mrp}
+                </span>
               )}
             </div>
             <motion.button

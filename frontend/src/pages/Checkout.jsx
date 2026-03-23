@@ -7,6 +7,7 @@ import { selectCartTotal, clearCartState } from '../store/slices/cartSlice';
 import { pageTransition } from '../animations/motionVariants';
 import { MapPin, Clock, CreditCard, ChevronRight } from 'lucide-react';
 import { Spinner } from '../components/Loader';
+import { getImageUrl } from '../utils/imageUrl';
 import api from '../services/api';
 import toast from 'react-hot-toast';
 
@@ -49,13 +50,12 @@ export default function Checkout() {
   const DELIVERY_FEE = total >= 199 ? 0 : 20;
   const grandTotal = total + DELIVERY_FEE;
 
-  // Validate address fields
   const validateAddress = () => {
-    if (!address.fullName.trim()) { toast.error('Please enter your name'); return false; }
-    if (!address.phone.trim()) { toast.error('Please enter your phone number'); return false; }
-    if (!address.line1.trim()) { toast.error('Please enter address line 1'); return false; }
-    if (!address.city.trim()) { toast.error('Please enter your city'); return false; }
-    if (!address.pincode.trim()) { toast.error('Please enter your pincode'); return false; }
+    if (!address.fullName.trim()) { toast.error('Enter your full name'); return false; }
+    if (!address.phone.trim()) { toast.error('Enter your phone number'); return false; }
+    if (!address.line1.trim()) { toast.error('Enter address line 1'); return false; }
+    if (!address.city.trim()) { toast.error('Enter your city'); return false; }
+    if (!address.pincode.trim()) { toast.error('Enter your pincode'); return false; }
     return true;
   };
 
@@ -76,21 +76,33 @@ export default function Checkout() {
         unit: i.product.unit || '500ml',
       }));
 
-      const orderData = {
-        address,
-        deliverySlot: slot,
-        paymentMethod: payMethod,
-        items: orderItems,
-        subtotal: total,
-        deliveryFee: DELIVERY_FEE,
-        discount: 0,
-        total: grandTotal,
-      };
+      const order = await dispatch(
+        createOrder({
+          address,
+          deliverySlot: slot,
+          paymentMethod: payMethod,
+          items: orderItems,
+          subtotal: total,
+          deliveryFee: DELIVERY_FEE,
+          discount: 0,
+          total: grandTotal,
+        })
+      ).unwrap();
 
-      const order = await dispatch(createOrder(orderData)).unwrap();
+      if (payMethod === 'cod' || payMethod === 'upi') {
+        dispatch(clearCartState());
+        toast.success('Order placed successfully! 🥛');
+        navigate(`/orders/${order._id}`);
+        return;
+      }
 
       if (payMethod === 'razorpay') {
-        // Razorpay online payment flow
+        if (!window.Razorpay) {
+          toast.error('Payment gateway not loaded. Please refresh the page.');
+          setLoading(false);
+          return;
+        }
+
         const { data } = await api.post('/payments/create-order', {
           amount: grandTotal,
           orderId: order._id,
@@ -99,9 +111,9 @@ export default function Checkout() {
         const options = {
           key: import.meta.env.VITE_RAZORPAY_KEY_ID,
           amount: data.amount,
-          currency: 'INR',
-          name: 'DairyFresh',
-          description: 'Order Payment',
+          currency: data.currency || 'INR',
+          name: 'Shridhar Dairy',
+          description: `Order #${order.orderNumber || order._id}`,
           order_id: data.razorpayOrderId,
           handler: async (response) => {
             try {
@@ -112,10 +124,10 @@ export default function Checkout() {
                 orderId: order._id,
               });
               dispatch(clearCartState());
-              toast.success('Payment successful! 🎉');
+              toast.success('Payment successful! Order confirmed 🎉');
               navigate(`/orders/${order._id}`);
             } catch {
-              toast.error('Payment verification failed');
+              toast.error('Payment verification failed. Contact support.');
             }
           },
           prefill: {
@@ -123,23 +135,27 @@ export default function Checkout() {
             email: user?.email || '',
             contact: user?.phone || '',
           },
+          notes: { orderId: order._id },
           theme: { color: '#16a34a' },
+          modal: {
+            ondismiss: () => {
+              toast('Payment cancelled. Your order is saved.', { icon: '⚠️' });
+              navigate(`/orders/${order._id}`);
+            },
+          },
         };
 
-        if (window.Razorpay) {
-          const rzp = new window.Razorpay(options);
-          rzp.open();
-        } else {
-          toast.error('Razorpay not loaded. Please refresh and try again.');
-        }
-      } else {
-        // COD or UPI
-        dispatch(clearCartState());
-        toast.success('Order placed successfully! 🥛');
-        navigate(`/orders/${order._id}`);
+        const rzp = new window.Razorpay(options);
+        rzp.on('payment.failed', (response) => {
+          toast.error(`Payment failed: ${response.error.description}`);
+        });
+        rzp.open();
       }
     } catch (err) {
-      const message = typeof err === 'string' ? err : err?.message || 'Failed to place order';
+      const message =
+        typeof err === 'string'
+          ? err
+          : err?.message || 'Failed to place order';
       toast.error(message);
     } finally {
       setLoading(false);
@@ -147,12 +163,19 @@ export default function Checkout() {
   };
 
   return (
-    <motion.div {...pageTransition} className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <motion.div
+      {...pageTransition}
+      className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
+    >
       {/* Stepper */}
       <div className="flex items-center justify-center mb-8">
         {STEPS.map((s, i) => (
           <React.Fragment key={s}>
-            <div className={`flex items-center gap-2 ${i <= step ? 'text-brand-600' : 'text-gray-400'}`}>
+            <div
+              className={`flex items-center gap-2 ${
+                i <= step ? 'text-brand-600' : 'text-gray-400'
+              }`}
+            >
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-colors ${
                   i < step
@@ -167,7 +190,11 @@ export default function Checkout() {
               <span className="text-sm font-medium hidden sm:block">{s}</span>
             </div>
             {i < STEPS.length - 1 && (
-              <div className={`h-0.5 w-8 sm:w-16 mx-1 ${i < step ? 'bg-brand-500' : 'bg-gray-200'}`} />
+              <div
+                className={`h-0.5 w-8 sm:w-16 mx-1 ${
+                  i < step ? 'bg-brand-500' : 'bg-gray-200'
+                }`}
+              />
             )}
           </React.Fragment>
         ))}
@@ -203,7 +230,9 @@ export default function Checkout() {
                     <input
                       type="text"
                       value={address[f.key]}
-                      onChange={(e) => setAddress({ ...address, [f.key]: e.target.value })}
+                      onChange={(e) =>
+                        setAddress({ ...address, [f.key]: e.target.value })
+                      }
                       className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-400"
                     />
                   </div>
@@ -218,7 +247,7 @@ export default function Checkout() {
             </motion.div>
           )}
 
-          {/* Step 1: Delivery Slot */}
+          {/* Step 1: Slot */}
           {step === 1 && (
             <motion.div
               initial={{ opacity: 0, x: 20 }}
@@ -257,7 +286,10 @@ export default function Checkout() {
                 </button>
                 <button
                   onClick={() => {
-                    if (!slot.date) { toast.error('Please select a delivery slot'); return; }
+                    if (!slot.date) {
+                      toast.error('Please select a delivery slot');
+                      return;
+                    }
                     setStep(2);
                   }}
                   className="bg-brand-600 hover:bg-brand-700 text-white font-semibold px-5 py-2 rounded-xl text-sm flex items-center gap-1 transition-colors"
@@ -305,7 +337,7 @@ export default function Checkout() {
                       <p className="text-xs text-gray-400">{opt.desc}</p>
                     </div>
                     <div
-                      className={`w-4 h-4 rounded-full border-2 ${
+                      className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${
                         payMethod === opt.value
                           ? 'border-brand-500 bg-brand-500'
                           : 'border-gray-300'
@@ -326,8 +358,10 @@ export default function Checkout() {
                   disabled={loading}
                   className="flex-1 bg-brand-600 hover:bg-brand-700 disabled:opacity-60 text-white font-semibold py-2.5 rounded-xl flex items-center justify-center gap-2 transition-colors"
                 >
-                  {loading ? <Spinner size="sm" /> : null}
-                  {loading ? 'Placing order...' : `Place Order • ₹${grandTotal.toFixed(2)}`}
+                  {loading && <Spinner size="sm" />}
+                  {loading
+                    ? 'Placing order...'
+                    : `Place Order • ₹${grandTotal.toFixed(2)}`}
                 </button>
               </div>
             </motion.div>

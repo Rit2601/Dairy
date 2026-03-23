@@ -20,7 +20,12 @@ const createOrder = asyncHandler(async (req, res) => {
     throw new Error('No items in order');
   }
 
-  // Delivery radius check (only if coordinates provided)
+  if (!total || total <= 0) {
+    res.status(400);
+    throw new Error('Invalid order total');
+  }
+
+  // Delivery radius check only if coordinates provided
   if (address?.lat && address?.lng) {
     const { inRange } = isWithinDeliveryRadius(
       parseFloat(address.lat),
@@ -39,10 +44,7 @@ const createOrder = asyncHandler(async (req, res) => {
     items,
     address,
     deliverySlot,
-    payment: {
-      method: paymentMethod,
-      status: 'pending',
-    },
+    payment: { method: paymentMethod, status: 'pending' },
     subtotal: subtotal || 0,
     deliveryFee: deliveryFee || 0,
     discount: discount || 0,
@@ -52,7 +54,7 @@ const createOrder = asyncHandler(async (req, res) => {
     ],
   });
 
-  // Clear cart after order
+  // Clear user cart
   await Cart.findOneAndUpdate({ user: req.user._id }, { items: [] });
 
   res.status(201).json({ success: true, order });
@@ -86,11 +88,23 @@ const getAllOrders = asyncHandler(async (req, res) => {
 
 const updateOrderStatus = asyncHandler(async (req, res) => {
   const { status, note } = req.body;
+
+  const validStatuses = [
+    'placed', 'confirmed', 'preparing',
+    'out_for_delivery', 'delivered', 'cancelled',
+  ];
+
+  if (!validStatuses.includes(status)) {
+    res.status(400);
+    throw new Error(`Invalid status. Must be one of: ${validStatuses.join(', ')}`);
+  }
+
   const order = await Order.findById(req.params.id);
   if (!order) {
     res.status(404);
     throw new Error('Order not found');
   }
+
   order.status = status;
   order.statusHistory.push({ status, note: note || '' });
   if (status === 'delivered') order.deliveredAt = new Date();
@@ -98,6 +112,7 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
     order.cancelledAt = new Date();
     order.cancellationReason = note || '';
   }
+
   await order.save();
   res.json({ success: true, order });
 });
